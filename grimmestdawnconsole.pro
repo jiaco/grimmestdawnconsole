@@ -14,5 +14,15 @@ CONFIG   -= app_bundle
 
 TEMPLATE = app
 
+DEFINES += ZLIB_WINAPI
 
-SOURCES += main.cpp
+INCLUDEPATH += C:\Qt\Qt5.0.2\5.0.2\Src\qtbase\src\3rdparty\zlib
+#LIBS += -lzlibwap
+
+SOURCES += main.cpp \
+    utility.cpp \
+    arz.cpp
+
+HEADERS += \
+    utility.h \
+    arz.h
