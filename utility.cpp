@@ -1,9 +1,117 @@
 #include "utility.h"
 
+
+TextFile::TextFile( const QString& fname, const QIODevice::OpenMode& mode )
+{
+    if( !fname.isEmpty() ) {
+        open( fname, mode );
+    }
+}
+TextFile::~TextFile()
+{
+    file.close();
+}
+bool    TextFile::open( const QString& fname, const QIODevice::OpenMode& mode )
+{
+    bool rv;
+    if( fname == "stdout" ) {
+        rv = file.open( stdout, mode );
+    } else if( fname == "stdin" ) {
+        rv = file.open( stdin, mode );
+    } else {
+        file.setFileName( fname );
+        rv = file.open( mode );
+    }
+    setDevice( &file );
+    return( rv );
+}
+int TextFile::seek( const qint32& pos )
+{
+    return( file.seek( pos ) );
+}
+
+DataFile::DataFile( const QString& fname, const QIODevice::OpenMode& mode )
+{
+    if( !fname.isEmpty() ) {
+        open( fname, mode );
+    }
+}
+DataFile::~DataFile()
+{
+    file.close();
+}
+bool    DataFile::open( const QString& fname, const QIODevice::OpenMode& mode )
+{
+    bool rv;
+    file.setFileName( fname );
+    rv = file.open( mode );
+    setDevice( &file );
+    setByteOrder( QDataStream::LittleEndian );
+    return( rv );
+
+}
+int DataFile::seek( const qint32& pos )
+{
+    return( file.seek( pos ) );
+}
+
+
 Utility::Utility()
 {
 }
-QByteArray Utility::Decompress( const QByteArray &in, QTextStream& ofp )
+QString  Utility::ReadCString( QDataStream& fp )
+{
+    QString rv;
+    uint rlen;
+    char *sp;
+    fp.readBytes( sp, rlen );
+    rv = QString::fromLocal8Bit( sp );
+    delete[] sp;
+    return( rv );
+}
+QByteArray  Utility::ReadCompressed(DataFile &fp, const qint32 &offset, const qint32 &size)
+{
+    char    *sp;
+    QByteArray  rv;
+    int rsize;
+
+    fp.seek( offset );
+    sp = new char[ size ];
+    rsize = fp.readRawData( sp, size );
+    if( rsize != size ) {
+        return( rv );
+    }
+    rv.setRawData( sp, (uint)size );
+    return( rv );
+
+}
+
+QByteArray Utility::Decompress( const QByteArray &in )
+{
+    QByteArray rv;
+    Bytef *compr = (Bytef*)( in.data() );
+    uLong comprLen = (uLong)( in.size() );
+    Bytef *out = new Bytef[10240];
+    uLong outLen = 10240;
+
+    int err = uncompress( out, &outLen, compr, comprLen );
+    rv.setRawData( (char*)out, outLen );
+    return( rv );
+}
+QByteArray Utility::Compress( const QByteArray& in )
+{
+    QByteArray rv;
+    Bytef *data = (Bytef*)( in.data() );
+    uLong dataLen = (uLong)( in.size() );
+    Bytef *cdata = new Bytef[ dataLen ];
+    uLong cdataLen = dataLen;
+
+    int err = compress( cdata, &cdataLen, data, dataLen );
+    rv.setRawData( (char*)cdata, cdataLen );
+    return( rv );
+}
+
+QByteArray Utility::DecompressDebug( const QByteArray &in, QTextStream& ofp )
 {
     QByteArray rv;
    /*
@@ -32,7 +140,7 @@ QByteArray Utility::Decompress( const QByteArray &in, QTextStream& ofp )
     return( rv );
     //return( QByteArray( (char*)out ) );
 }
-QByteArray Utility::Compress( const QByteArray& in, QTextStream& ofp )
+QByteArray Utility::CompressDebug( const QByteArray& in, QTextStream& ofp )
 {
     QByteArray rv;
 
@@ -47,7 +155,6 @@ QByteArray Utility::Compress( const QByteArray& in, QTextStream& ofp )
     ofp << "DEBUG " << err << "  :  " << cdataLen << endl;
 
     return( rv );
-
 }
 QByteArray Utility::Compress2( const QByteArray& in, const int& compressionLevel, QTextStream& ofp )
 {

@@ -5,44 +5,66 @@
 #include <QTextStream>
 #include <QDataStream>
 #include <QString>
+#include <QStringList>
 
 #include "utility.h"
 
-inline QString  ReadCString( QDataStream& fp, QTextStream& cout )
+class Record
 {
-    QString rv;
-    //qint32  len;
+public:
+    Record();
+    Record( DataFile& fp, int baseOffset = 24 );
+    ~Record();
 
-   // fp >> len;
-   // cout << "DEBUG String length " << len << endl;
+    qint32  idstringIndex;
+    QString recordType;
+    qint32  dataOffset;
+    qint32  dataCSize;
+    qint32  unk1, unk2;
 
-    uint rlen;
-    char *sp;
-    fp.readBytes( sp, rlen );
+    QString idstring0;
 
-    cout << "DEBUG read length " << rlen << endl;
-    //char *sp = new char[ len + 1 ];
-    //fp.readRawData( sp, len + 1 );
-    //rv.fromRawData( sp, len );
-    cout << "DEBUG sp = " << sp << endl;
-    rv = QString::fromLocal8Bit( sp );
-    delete[] sp;
-    return( rv );
-}
+    QByteArray data, cdata;
+
+    void readData( DataFile& fp );
+    void    lookupString0( const QStringList& tab );
+    void decompress();
+    void decode();
+    void    doit( DataFile& fp, const QStringList& stab );
+    void show( QTextStream& fp );
+};
 
 class ARZ
 {
 public:
     ARZ();
     ~ARZ();
+
+    bool readRecordInfo(const qint32& pos, const qint32& cnt );
+    bool    lookupString0s();
+    bool readRecordData();
+    bool decompressData();
+
+    bool readStringTable( const qint32& pos, const qint32& size );
+
 //    static const char* dbfilename = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database";
     void doit();
 
-    QFile       coutfile, dbfile;
-    QDataStream dbfp;
-    QTextStream cout;
+    DataFile    arz;
+    TextFile    cout;
 
-    qint32 header[6];
+
+protected:
+    static const int HEAD_SIZE = 6;
+    static const int FOOT_SIZE = 4;
+    static const int SKIP_HEAD = 24;
+
+    qint32 header[ HEAD_SIZE ];
+    qint32 footer[ FOOT_SIZE ];
+
+    QList<Record>   records;
+    QStringList     strings;
+    qint32          instringsCnt;
 };
 
 #endif // ARZ_H

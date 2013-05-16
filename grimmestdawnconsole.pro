@@ -17,6 +17,7 @@ TEMPLATE = app
 DEFINES += ZLIB_WINAPI
 
 INCLUDEPATH += C:\Qt\Qt5.0.2\5.0.2\Src\qtbase\src\3rdparty\zlib
+#INCLUDEPATH += C:\Qt\4.8.4\src\3rdparty\zlib
 #LIBS += -lzlibwap
 
 SOURCES += main.cpp \

@@ -1,17 +1,46 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
+#include <QFile>
+#include <QDataStream>
 #include <QByteArray>
 #include <QTextStream>
 #include <zlib.h>
+
+class TextFile : public QTextStream
+{
+public:
+    TextFile( const QString& fname = "", const QIODevice::OpenMode& mode = QIODevice::ReadOnly );
+    ~TextFile();
+
+    bool open( const QString& fname, const QIODevice::OpenMode& mode );
+    int seek( const qint32& pos = 0 );
+protected:
+    QFile   file;
+};
+
+class DataFile : public QDataStream
+{
+public:
+    DataFile( const QString& fname = "", const QIODevice::OpenMode& mode = QIODevice::ReadOnly );
+    ~DataFile();
+
+    bool    open( const QString& fname, const QIODevice::OpenMode& mode );
+    int     seek( const qint32& pos = 0 );
+protected:
+    QFile   file;
+};
 
 class Utility
 {
 public:
     Utility();
-
-    static QByteArray Decompress( const QByteArray &in, QTextStream& ofp );
-    static QByteArray Compress( const QByteArray &in, QTextStream& ofp );
+    static QString  ReadCString( QDataStream& fp );
+    static QByteArray   ReadCompressed( DataFile& fp, const qint32& offset, const qint32& size );
+    static QByteArray Decompress( const QByteArray &in );
+    static QByteArray Compress( const QByteArray &in );
+    static QByteArray DecompressDebug( const QByteArray &in, QTextStream& ofp );
+    static QByteArray CompressDebug( const QByteArray &in, QTextStream& ofp );
     static QByteArray Compress2( const QByteArray &in, const int& compressionLevel, QTextStream& ofp );
 
 };
