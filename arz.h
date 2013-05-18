@@ -6,33 +6,70 @@
 #include <QDataStream>
 #include <QString>
 #include <QStringList>
+#include <QRegExp>
 
 #include "utility.h"
+
+/*
+inline int BackInt( const QString& s )
+{
+    QRexgEx
+}
+*/
+class   NormalPool
+{
+public:
+    NormalPool();
+    int name, weight, levelVar;
+    int nameIdx, weightIdx, levelVarIdx;
+};
+class   ChampionPool : public NormalPool
+{
+public:
+    ChampionPool();
+    int limit, minPClevel;
+    int limitIdx, minPClevelIdx;
+};
+
+class Variable
+{
+    /* dataTypes:
+     * 0 integer
+     * 1 float
+     * 2 string
+     * 3 bool
+     */
+public:
+   // QString name;
+    qint32     nameIndex;
+    qint16     dataType;
+    qint16     valCount;
+    QList<QVariant> data;
+};
 
 class Record
 {
 public:
     Record();
-    Record( DataFile& fp, int baseOffset = 24 );
     ~Record();
+
 
     qint32  idstringIndex;
     QString recordType;
     qint32  dataOffset;
     qint32  dataCSize;
     qint32  unk1, unk2;
-
-    QString idstring0;
+   // QString tmplate;
+   // QString idstring0;
 
     QByteArray data, cdata;
+    QList<Variable> vars;
 
     void readData( DataFile& fp );
-    void    lookupString0( const QStringList& tab );
     void decompress();
-    void decode();
-    void    doit( DataFile& fp, const QStringList& stab );
-    void show( QTextStream& fp );
+    void repack();
 };
+
 
 class ARZ
 {
@@ -40,19 +77,30 @@ public:
     ARZ();
     ~ARZ();
 
-    bool readRecordInfo(const qint32& pos, const qint32& cnt );
-    bool    lookupString0s();
-    bool readRecordData();
-    bool decompressData();
+    static const int RD_POS = 1;
+    static const int RD_SIZE = 2;
+    static const int RD_CNT = 3;
+    static const int ST_POS = 4;
+    static const int ST_SIZE = 5;
 
-    bool readStringTable( const qint32& pos, const qint32& size );
+    QString string( const int& idx ) const;
+    int     stringIndex( const QString& string ) const;
 
-//    static const char* dbfilename = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database";
     void doit();
+    bool write( const QString& fname );
+    bool    openInputFile( const QString& fname );
+    bool    readArz();
+    void    buildHelpers();
+    int     decodeRecord( const int& ridx );
 
-    DataFile    arz;
-    TextFile    cout;
-
+    // modding functions
+    //
+    void    xmax( const int& x );
+    void    flattenProxyWeights();
+    void    inflateVariance();
+    void    inflateVariance2();
+    void    showVariable( const int& r, const int& v );
+    void    showSubset( const int& r, const QList<int>& vtab );
 
 protected:
     static const int HEAD_SIZE = 6;
@@ -62,9 +110,22 @@ protected:
     qint32 header[ HEAD_SIZE ];
     qint32 footer[ FOOT_SIZE ];
 
-    QList<Record>   records;
+    DataFile    arz;
+    TextFile    cout;
+    Byter   byter;
+
+    Record  *records;
+    int     s_records;
+    QStringList recordNames;
+   // QStringList recordTemplates;
+
     QStringList     strings;
+    int             s_strings;
     qint32          instringsCnt;
+
+    QHash<QString,int>  rslt; // reverse string lookup table
+    QHash<int,QList<int> > tlt; // template lookup table
 };
+
 
 #endif // ARZ_H

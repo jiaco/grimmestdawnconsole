@@ -38,6 +38,7 @@ DataFile::DataFile( const QString& fname, const QIODevice::OpenMode& mode )
 }
 DataFile::~DataFile()
 {
+
     file.close();
 }
 bool    DataFile::open( const QString& fname, const QIODevice::OpenMode& mode )
@@ -54,7 +55,41 @@ int DataFile::seek( const qint32& pos )
 {
     return( file.seek( pos ) );
 }
+int DataFile::pos()
+{
+    return( file.pos() );
+}
 
+Byter::Byter()
+{
+    sp = NULL;
+    s_sp = 0;
+}
+
+Byter::~Byter()
+{
+    if( sp ) {
+        delete[] sp;
+        sp = NULL;
+    }
+}
+
+QString Byter::GetCString( QDataStream& fp )
+{
+    qint32 size;
+
+    fp >> size;
+    if( size > s_sp ) {
+        s_sp = size * 2;
+        if( sp ) {
+            delete[] sp;
+            sp = NULL;
+        }
+        sp = new char[ s_sp ];
+    }
+    fp.readRawData( sp, size );
+    return( QString::fromLocal8Bit(sp, size ) );
+}
 
 Utility::Utility()
 {

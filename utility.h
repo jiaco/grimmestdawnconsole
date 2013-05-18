@@ -27,8 +27,22 @@ public:
 
     bool    open( const QString& fname, const QIODevice::OpenMode& mode );
     int     seek( const qint32& pos = 0 );
+    int     pos();
 protected:
     QFile   file;
+};
+
+class Byter
+{
+public:
+    Byter();
+    ~Byter();
+
+    QString GetCString( QDataStream& fp );
+    //char*   GetCharp( QDataStream& fp, qint32 pos, qint32 len );
+    //QByteArray GetBytes( QDataStream& fp, qint32 pos, qint32 len );
+    char    *sp;
+    int     s_sp;
 };
 
 class Utility
