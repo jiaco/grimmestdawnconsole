@@ -30,6 +30,13 @@ public:
     int limit, minPClevel;
     int limitIdx, minPClevelIdx;
 };
+class   BasePool
+{
+public:
+    int spawnMin, spawnMax;
+    int championMin;
+    int spawnMinIdx, spawnMaxIdx, championMinIdx;
+};
 
 class Variable
 {
@@ -88,13 +95,13 @@ public:
 
     void doit();
     bool write( const QString& fname );
-    bool    openInputFile( const QString& fname );
     bool    readArz();
     void    buildHelpers();
     int     decodeRecord( const int& ridx );
 
     // modding functions
     //
+    void    maxPlayerLevel( const int& x = 50 );
     void    xmax( const int& x );
     void    flattenProxyWeights();
     void    inflateVariance();
@@ -110,8 +117,9 @@ protected:
     qint32 header[ HEAD_SIZE ];
     qint32 footer[ FOOT_SIZE ];
 
-    DataFile    arz;
+    DataFile    ifp;
     TextFile    cout;
+    TextFile    log;
     Byter   byter;
 
     Record  *records;

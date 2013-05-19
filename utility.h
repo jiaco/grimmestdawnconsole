@@ -28,6 +28,7 @@ public:
     bool    open( const QString& fname, const QIODevice::OpenMode& mode );
     int     seek( const qint32& pos = 0 );
     int     pos();
+    int     size();
 protected:
     QFile   file;
 };

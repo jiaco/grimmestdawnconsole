@@ -145,84 +145,94 @@ int ARZ::stringIndex( const QString& s ) const
 }
 void ARZ::doit()
 {
-    // QString fname = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database\\database.arz";
-    QString fname = "D:\\Steam\\steamapps\\common\\Grim Dawn\\database\\stock_database.arz";
+    QString driveLetter = "D:";
+    QString dbLocation = "Steam\\steamapps\\common\\Grim Dawn\\database";
+    QString dbName = "stock_b9_database.arz";
+    QString outName = "modded_database.arz";
+    QString logName = "modded_log.txt";
+    QString dbPath = QString( "%1\\%2" ).arg( driveLetter ).arg( dbLocation );
 
-   if( !openInputFile( fname ) ) {
-       cout << "ERROR reading input file " << fname << endl;
-       return;
-   }
-   readArz();
+    QString ifname = QString( "%1\\%2" ).arg( dbPath ).arg( dbName );
+    QString lfname = QString( "%1\\%2" ).arg( dbPath ).arg( logName );
+    QString ofname = QString( "%1\\%2" ).arg( dbPath ).arg( outName );
 
-   buildHelpers();
-   //xmax( 2 );
-   flattenProxyWeights();
+    if( !ifp.open( ifname, QIODevice::ReadOnly ) ) {
+        cout << "ERROR: failed to read " << ifname << endl;
+        return;
+    }
+    if( !log.open( lfname, QIODevice::WriteOnly ) ) {
+        cout << "ERROR: failed to write " << lfname << endl;
+    }
+    readArz();
+    buildHelpers();
+    maxPlayerLevel( 50 );
+    xmax( 2 );
+    flattenProxyWeights();
   // inflateVariance2();
 
-   QString ofname = fname;
-   ofname.replace( "stock_", "modded_" );
    write( ofname );
 }
 
-bool    ARZ::openInputFile( const QString& fname ){
-    return( arz.open( fname, QIODevice::ReadOnly ) );
-}
 bool    ARZ::readArz()
 {
-    // HEADER
+    // HEADER : First 24 bytes are a 6 qint32 header
     //
     for( int i = 0; i < HEAD_SIZE; ++i ) {
-        arz >> header[i];
+        ifp >> header[i];
     }
-//    cout << "DEBUG RD count " << header[RD_CNT] << " pos " << header[RD_POS] << " ( " << header[RD_SIZE] << " )" << endl;
-//    cout << "DBEUG ST pos " << header[ST_POS] << " ( " << header[ST_SIZE] << " )" << endl;
-
-    // After header is record data, but need info first
+    // After header is compressed record data, but need info first
     //
+    ifp.seek( header[RD_POS] );
     s_records = header[RD_CNT];
     records = new Record[ s_records ];
-
-    arz.seek( header[RD_POS] );
     for( int i = 0; i < s_records; ++i ) {
-        arz >> records[i].idstringIndex;
-        records[i].recordType = byter.GetCString( arz );
-        arz >> records[i].dataOffset;
-        arz >> records[i].dataCSize;
-        arz >> records[i].unk1;
-        arz >> records[i].unk2;
+        ifp >> records[i].idstringIndex;
+        records[i].recordType = byter.GetCString( ifp );
+        ifp >> records[i].dataOffset;
+        ifp >> records[i].dataCSize;
+        ifp >> records[i].unk1;
+        ifp >> records[i].unk2;
     }
-    cout << "DEBUG " <<  header[RD_POS] + header[RD_SIZE] << endl;
-    cout << "DEBUG arz.pos " << arz.pos() << " " << endl;
+    cout << "DEBUG " << header[RD_CNT] <<  "Records " <<  header[RD_POS] + header[RD_SIZE] << " == " << ifp.pos() << endl;
 
     // STRING TABLE
     //
-    cout << "DEBUG seek " << header[ST_POS] << endl;
-    arz.seek( header[ST_POS] );
-    arz >> s_strings;
+    ifp.seek( header[ST_POS] );
+    ifp >> s_strings;
     strings.reserve( s_strings );
     for( int i = 0; i < s_strings; ++i ) {
-        strings << byter.GetCString( arz );
+        strings << byter.GetCString( ifp );
     }
-   cout << "DEBUG read " << strings.size() << " strings" << endl;
+    cout << "DEBUG " << strings.size() << " strings " << header[ST_POS] << " " << header[ST_SIZE] << endl;
 
-   //SHOULD BE AT FOOTER AFTER STRING TABLE
+   // SHOULD BE AT FOOTER AFTER STRING TABLE
+    //
+    // 4 qint32 with first being string table size count ??
    //
    for( int i = 0; i < FOOT_SIZE; ++i ) {
-       arz >> footer[i];
-       cout << "DEBUG FOOT " << i << " " << footer[i] << endl;
+       ifp >> footer[i];
+       cout << "DEBUG FOOTER " << i << " " << footer[i] << endl;
    }
-   cout << "DEBUG endof file pos " << arz.pos() << endl;
+   cout << "DEBUG endof file pos " << ifp.pos() << endl;
+   cout << "DEBUG file size is: " << ifp.size() << endl;
+   qint16 i16;
+   ifp.seek( ifp.size() - 16 );
+   for( int i = 0; i < 8; ++i ) {
+       ifp >> i16;
+       cout << "DEBUG footer in 16 bit ints : " << i << " " << i16 << endl;
+   }
 
    // Now can go back and read each record data
    //
    recordNames.clear();
    recordNames.reserve( s_records );
    for( int i = 0; i < s_records; ++i ) {
-       records[i].readData( arz );
+       records[i].readData( ifp );
        recordNames << string( records[i].idstringIndex );
+       // no need to decompress everything
       // records[i].decompress();
    }
-   cout << "DEBUG record data read" << endl;
+   cout << "DEBUG ARZ::readFile() completed" << endl;
    return( true );
 }
 void    ARZ::buildHelpers()
@@ -262,6 +272,30 @@ void    ARZ::xmax( const int& x )
     //
     strings[ stringIndex( "poolValue * 1" ) ] = QString( "poolValue * %1" ).arg( x );
 }
+void    ARZ::maxPlayerLevel( const int& x )
+{
+    cout << "DEBUG find maxPlayer level" << endl;
+    int     tgt = stringIndex( "maxPlayerLevel" );
+    if( tgt == -1 ) {
+        cout << "DEBUG not found" << endl;
+        return;
+    }
+    cout << "maxPlayerLevel " << tgt << endl;
+    return;
+    for( int r = 0; r < recordNames.size(); ++r ) {
+        if( recordNames[r] != "records/creatures/pc/playerlevels.dbr" ) {
+            continue;
+        }
+        records[r].decompress();
+        decodeRecord( r );
+        for( int j = 0; j < records[r].vars.size(); ++j ) {
+            if( records[r].vars[j].nameIndex == tgt ) {
+                records[r].vars[j].data[0] = QVariant( x );
+            }
+        }
+    }
+}
+
 void    ARZ::inflateVariance()
 {
     QRegExp rx( "\\(\\(averagePlayerLevel\\+\\(averagePlayerLevel\\/([0-9]+)\\)\\)([+-][0-9]+)\\)");
@@ -344,6 +378,23 @@ void    ARZ::inflateVariance2()
 
 void    ARZ::flattenProxyWeights()
 {
+    // first get list of records in records/proxies
+    //
+    QList<int> proxyRecords;
+    for( int r = 0; r < recordNames.size(); ++r ) {
+        if( recordNames[r].startsWith( "records/proxies/" ) ) {
+            proxyRecords << r;
+        }
+    }
+    log << "Found " << proxyRecords.size() << " out of " << recordNames.size() << " proxies" << endl;
+
+    // send to log file a list of the current variance types:
+    //
+    foreach( int r, proxyRecords ) {
+        if( recordNames[r].startsWith( "records/proxies/lv" ) ) {
+            log << r << "\t" << recordNames[r] << endl;
+        }
+    }
 
     QStringList dbrs;
     dbrs << "lv1_weak" << "lv1_weak+" << "lv2_normal" << "lv2_normal+"
@@ -433,18 +484,21 @@ void    ARZ::flattenProxyWeights()
     QRegExp backInt = QRegExp( "\\d+$" );
     // since template field is possibly unset try using path:
     //
-    cout << "DEBUG records to search: " << recordNames.size() << endl;
-    for( int r = 0; r < s_records; ++r ) {
+    cout << "DEBUG records to search: " << proxyRecords.size() << endl;
+    foreach( int r, proxyRecords ) {
         if( !recordNames[r].startsWith( "records/proxies/pools/" ) ) {
             continue;
         }
         records[r].decompress();
         decodeRecord( r );
+        BasePool    bp;
         NormalPool   np[16];
         ChampionPool cp[16];
         int npool;
 
-        cout << "DEBUG " << recordNames[r] << endl;
+        // by putting all the weights to 100, it does not seem to help matters
+        // want to check if > 50 reduce and if < 50 then increase
+        //
         for( int j = 0; j < records[r].vars.size(); ++j ) {
             if( records[r].vars[j].data.size() == 0 ) {
                 continue;
@@ -454,21 +508,18 @@ void    ARZ::flattenProxyWeights()
                 continue;
             }
             if( records[r].vars[j].nameIndex == fldToIdx[ "spawnMin" ] ) {
-                int v = records[r].vars[j].data.at(0).toInt();
-                v += 4;
-                records[r].vars[j].data[0] = QVariant( v );
+                bp.spawnMin = records[r].vars[j].data.at(0).toInt();
+                bp.spawnMinIdx = j;
                 continue;
             }
             if( records[r].vars[j].nameIndex == fldToIdx[ "spawnMax" ] ) {
-                int v = records[r].vars[j].data.at(0).toInt();
-                v += 6;
-                records[r].vars[j].data[0] = QVariant( v );
+                bp.spawnMax = records[r].vars[j].data.at(0).toInt();
+                bp.spawnMaxIdx = j;
                 continue;
             }
             if( records[r].vars[j].nameIndex == fldToIdx[ "championMin" ] ) {
-                int v = records[r].vars[j].data.at(0).toInt();
-                v += 2;
-                records[r].vars[j].data[0] = QVariant( v );
+                bp.championMin = records[r].vars[j].data.at(0).toInt();
+                bp.championMinIdx = j;
                 continue;
             }
             // now we are either in a field for name or champion
@@ -477,10 +528,10 @@ void    ARZ::flattenProxyWeights()
                 int pos = backInt.indexIn( fieldName );
                 if( pos > 0 ) {
                     npool = backInt.cap(0).toInt();
-                    if( fieldName.startsWith( "nameChampion" ) ) {
+                    if( fieldName.startsWith( "name" ) ) {
                         np[ npool ].name = records[r].vars[j].data[0].toInt();
                         np[ npool ].nameIdx = j;
-                    } else if( fieldName.startsWith( "weightChampion" ) ) {
+                    } else if( fieldName.startsWith( "weight" ) ) {
                         np[ npool ].weight = records[r].vars[j].data[0].toInt();
                         np[ npool ].weightIdx = j;
                     } else if( fieldName.startsWith( "levelVarianceEquation" ) ) {
@@ -494,10 +545,10 @@ void    ARZ::flattenProxyWeights()
                 int pos = backInt.indexIn( fieldName );
                 if( pos > 0 ) {
                     npool = backInt.cap(0).toInt();
-                    if( fieldName.startsWith( "name" ) ) {
+                    if( fieldName.startsWith( "nameChampion" ) ) {
                         cp[ npool ].name = records[r].vars[j].data[0].toInt();
                         cp[ npool ].nameIdx = j;
-                    } else if( fieldName.startsWith( "weight" ) ) {
+                    } else if( fieldName.startsWith( "weightChampion" ) ) {
                         cp[ npool ].weight = records[r].vars[j].data[0].toInt();
                         cp[ npool ].weightIdx = j;
                     } else if( fieldName.startsWith( "levelVarianceEquationChampion" ) ) {
@@ -512,46 +563,82 @@ void    ARZ::flattenProxyWeights()
                     }
                 }
             }
-            /*
-            if( records[r].vars[j].nameIndex == spawnMin &&
-                    records[r].vars[j].data.size() > 0 ) {
-                int v = records[r].vars[j].data.at(0).toInt();
-                records[r].vars[j].data[0] = QVariant( v + 5 );
-            } else if( records[r].vars[j].nameIndex == championMin &&
-                   records[r].vars[j].data.size() > 0 ) {
-                int v = records[r].vars[j].data.at(0).toInt();
-                records[r].vars[j].data[0] = QVariant( v + 2 );
-              */
-
         }
-        // out of the record, have enough data to re-weight things?
+        if( bp.spawnMax > 1 ) {
+            log << "Modding " << recordNames[r] << " spawns " << bp.spawnMin << " -> " << bp.spawnMax << " champs " << bp.championMin << endl;
+            bp.spawnMin += 4;
+            bp.spawnMax += 6;
+            bp.championMin += 2;
+
+            records[r].vars[bp.spawnMinIdx].data[0] = QVariant( bp.spawnMin );
+            records[r].vars[bp.spawnMaxIdx].data[0] = QVariant( bp.spawnMax );
+            records[r].vars[bp.championMinIdx].data[0] = QVariant( bp.championMin );
+        } else {
+            log << "Skipping " << recordNames[r] << " due to spawnMax == 1" << endl;
+            continue;
+        }
+
+        int ncnt = 0;
+        int wsum = 0;
+        int nweight = 0;
         for( int i = 1; i < 16; ++i ) {
             if( np[i].name == -1 ) {
                 continue;
             }
-            records[r].vars[ np[i].weightIdx ].data[0] = QVariant( 100 );
-            records[r].vars[ np[i].levelVarIdx ].data[0] = QVariant( lvchanger[ np[i].levelVar ] );
-
-           // cout << string( np[i].name ) << "\t" << np[i].weight << string( np[i].levelVar ) <<  endl;
-           // cout << "UPGRADED TO " << 100 << "\t" << string( lvchanger[ np[i].levelVar ] ) << endl;
+            ncnt += 1;
+            wsum += np[i].weight;
         }
+        if( ncnt > 0 ) {
+            log << "Normal Have " << ncnt << " entries with wsum = " << wsum << endl;
+            nweight = wsum / ncnt;
+
+            for( int i = 1; i < 16; ++i ) {
+                if( np[i].name == -1 ) {
+                    continue;
+                }
+                records[r].vars[ np[i].weightIdx ].data[0] = QVariant( nweight );
+                records[r].vars[ np[i].levelVarIdx ].data[0] = QVariant( lvchanger[ np[i].levelVar ] );
+
+               log << "NORMAL POOL " << string( np[i].name ) << "\t" << np[i].weight << "\t" << string( np[i].levelVar ) <<  endl;
+               log << "UPGRADED TO " << nweight << "\t" << string( lvchanger[ np[i].levelVar ] ) << endl;
+            }
+        }
+        ncnt = 0;
+        wsum = 0;
+        nweight = 0;
         for( int i = 1; i < 16; ++i ) {
             if( cp[i].name == -1 ) {
                 continue;
             }
-            cout << "DEBUG weight " << cp[i].weight << " " << cp[i].weightIdx << endl;
-            if( cp[i].weight != -1 ) {
-                records[r].vars[ cp[i].weightIdx ].data[0] = QVariant( 100 );
+            ncnt += 1;
+            if( cp[i].weight == -1 ) {
+                log << "THIS RECORD HAS name " << string( cp[i].nameIdx ) << " but no weight" << endl;
+            } else {
+                wsum += cp[i].weight;
             }
-            cout << "DEBUG minPC " << cp[i].minPClevel << " " << cp[i].minPClevelIdx << endl;
-            if( cp[i].minPClevel != -1 ) {
-                int lvl = records[r].vars[cp[i].minPClevelIdx ].data.at( 0 ).toInt();
-                lvl += ( lvl + 1 ) / 10;
-                records[r].vars[cp[i].minPClevelIdx ].data[ 0 ] = QVariant( lvl );
-
-            }
-
         }
+        if( ncnt > 0 ) {
+            log << "Champs Have " << ncnt << " entries with wsum = " << wsum << endl;
+            nweight = wsum / ncnt;
+            for( int i = 1; i < 16; ++i ) {
+                if( cp[i].name == -1 ) {
+                    continue;
+                }
+                if( cp[i].weight != -1 ) {
+                    log << "CHAMP POOL " << string( cp[i].name ) << " weight " << cp[i].weight << " set to " << nweight << endl;
+                    records[r].vars[ cp[i].weightIdx ].data[0] = QVariant( nweight );
+                }
+                if( cp[i].minPClevel != -1 ) {
+                    int lvl = records[r].vars[cp[i].minPClevelIdx ].data.at( 0 ).toInt();
+                    lvl -= ( lvl / 10 ) + 1;
+                    log << "      minPC " << cp[i].minPClevel << " set to " << lvl << endl;
+
+                    records[r].vars[cp[i].minPClevelIdx ].data[ 0 ] = QVariant( lvl );
+
+                }
+            }
+        }
+        log << endl;
     }
     cout << "DEBUG end of method" << endl;
 }

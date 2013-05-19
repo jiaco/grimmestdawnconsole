@@ -38,7 +38,6 @@ DataFile::DataFile( const QString& fname, const QIODevice::OpenMode& mode )
 }
 DataFile::~DataFile()
 {
-
     file.close();
 }
 bool    DataFile::open( const QString& fname, const QIODevice::OpenMode& mode )
@@ -58,6 +57,10 @@ int DataFile::seek( const qint32& pos )
 int DataFile::pos()
 {
     return( file.pos() );
+}
+int DataFile::size()
+{
+    return( file.size() );
 }
 
 Byter::Byter()
