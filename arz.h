@@ -65,7 +65,7 @@ public:
     QString recordType;
     qint32  dataOffset;
     qint32  dataCSize;
-    qint32  unk1, unk2;
+    qint32  unk1, unk2, unk3;
    // QString tmplate;
    // QString idstring0;
 

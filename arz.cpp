@@ -1,5 +1,7 @@
 #include "arz.h"
 
+// will need to use the old files to get at what we are expecting and
+// hopefully use that to figure out how it has changed...
 NormalPool::NormalPool()
 {
     name = weight = levelVar = -1;
@@ -27,11 +29,18 @@ Record::~Record()
 }
 void Record::readData( DataFile& fp )
 {
-    cdata = Utility::ReadCompressed( fp, dataOffset + 24, dataCSize );
+    char *sp;
+    sp = new char[ dataCSize ];
+    fp.seek( dataOffset + 24 );
+    fp.readRawData( sp, dataCSize );
+    cdata.setRawData( sp, (uint)dataCSize );
+    //cdata = Utility::ReadCompressed( fp, dataOffset + 24, dataCSize );
+    delete[] sp;
 }
 void Record::decompress()
 {
-    data = Utility::Decompress( cdata );
+    //data = Utility::Decompress( cdata );
+    data = cdata;
 }
 void    Record::repack()
 {
@@ -61,7 +70,8 @@ void    Record::repack()
             }
         }
         data = ndata;
-        cdata = Utility::Compress( data );
+        //cdata = Utility::Compress( data );
+        cdata = data;
         dataCSize = cdata.size();
     }
 
@@ -78,23 +88,54 @@ int ARZ::decodeRecord( const int& ridx )
         }
         records[ridx].decompress();
     }
+    log << "DEBUG " << recordNames[ridx] <<
+           " " << records[ridx].data.size() <<
+           " (1) "  << records[ridx].unk1 <<
+           " (2) " << records[ridx].unk2 <<
+           " (3) " << records[ridx].unk3 << endl;
+    log << "DEBUG unk1 a string ? " << string(records[ridx].unk1 ) << endl;
+
     // make list of variables
     QDataStream  dp( &records[ridx].data, QIODevice::ReadOnly );
     dp.setByteOrder( QDataStream::LittleEndian );
 
+
+    // BEGIN
+    Variable var;
+    for( int i = 0; i < 2; ++i ) {
+        dp >> var.dataType;
+        dp >> var.valCount;
+        dp >> var.nameIndex;
+        log << "DEBUG var " << var.dataType << " " << var.valCount
+            << " " << var.nameIndex << " "
+              // << string( var.nameIndex )
+               << endl;
+    }
+    return( 0 );
+    // END
     int numDWords = records[ridx].data.size() / 4;
     records[ridx].vars.clear();
     records[ridx].vars.reserve( numDWords / 3 );
 
+
+    if( numDWords < 0 ) {
+        log << "huh?" << endl;
+        return( 0 );
+    }
+    qint16 vs;
     qint32 vA;
+    for( int i = 1; i < numDWords && i < 5; ++i ) {
+        dp >> vA;
+        log << i << " : " << vA << endl;
+    }
     float    vB;
     int i = 0;
-    while( i < numDWords ) {
+    while( i >= 0 &&  i < numDWords ) {
          Variable var;
          dp >> var.dataType;
          dp >> var.valCount;
          dp >> var.nameIndex;
-         //var.name = string( var.nameIndex );
+         log << " DEBUG " << i << " / " << numDWords << " " << string( var.nameIndex ) << " " << var.dataType << " " << var.valCount << endl;
          i += ( 2 + var.valCount );
          for( int j = 0; j < var.valCount; ++j ) {
              switch(var.dataType ) {
@@ -147,7 +188,8 @@ void ARZ::doit()
 {
     QString driveLetter = "D:";
     QString dbLocation = "Steam\\steamapps\\common\\Grim Dawn\\database";
-    QString dbName = "stock_b9_database.arz";
+    //QString dbName = "stock_b9_database.arz";
+    QString dbName = "database.arz";
     QString outName = "modded_database.arz";
     QString logName = "modded_log.txt";
     QString dbPath = QString( "%1\\%2" ).arg( driveLetter ).arg( dbLocation );
@@ -163,14 +205,15 @@ void ARZ::doit()
     if( !log.open( lfname, QIODevice::WriteOnly ) ) {
         cout << "ERROR: failed to write " << lfname << endl;
     }
+    cout << "DEBUG send to readArz" << endl;
     readArz();
     buildHelpers();
-    maxPlayerLevel( 50 );
-    xmax( 2 );
+   // maxPlayerLevel( 50 );
+   // xmax( 2 );
     flattenProxyWeights();
   // inflateVariance2();
 
-   write( ofname );
+   //write( ofname );
 }
 
 bool    ARZ::readArz()
@@ -179,7 +222,19 @@ bool    ARZ::readArz()
     //
     for( int i = 0; i < HEAD_SIZE; ++i ) {
         ifp >> header[i];
+        cout << "DEBUG " << header[i] << endl;
     }
+    // STRING TABLE get this first
+    //
+    ifp.seek( header[ST_POS] );
+    ifp >> s_strings;
+    strings.reserve( s_strings );
+    for( int i = 0; i < s_strings; ++i ) {
+        strings << byter.GetCString( ifp );
+       // log << i << "\t" << strings[i] << endl;
+    }
+    cout << "DEBUG " << strings.size() << " strings " << header[ST_POS] << " " << header[ST_SIZE] << endl;
+    //
     // After header is compressed record data, but need info first
     //
     ifp.seek( header[RD_POS] );
@@ -192,29 +247,23 @@ bool    ARZ::readArz()
         ifp >> records[i].dataCSize;
         ifp >> records[i].unk1;
         ifp >> records[i].unk2;
+        ifp >> records[i].unk3;
+        //cout << "DEBUG unk " << records[i].unk1 << " " << records[i].unk2 << " " << records[i].unk3 << endl;
     }
-    cout << "DEBUG " << header[RD_CNT] <<  "Records " <<  header[RD_POS] + header[RD_SIZE] << " == " << ifp.pos() << endl;
-
-    // STRING TABLE
-    //
-    ifp.seek( header[ST_POS] );
-    ifp >> s_strings;
-    strings.reserve( s_strings );
-    for( int i = 0; i < s_strings; ++i ) {
-        strings << byter.GetCString( ifp );
-    }
-    cout << "DEBUG " << strings.size() << " strings " << header[ST_POS] << " " << header[ST_SIZE] << endl;
+    cout << "DEBUG " << header[RD_CNT] <<  " Records " <<  header[RD_POS] + header[RD_SIZE] << " == " << ifp.pos() << endl;
 
    // SHOULD BE AT FOOTER AFTER STRING TABLE
     //
     // 4 qint32 with first being string table size count ??
    //
+   ifp.seek( header[ST_POS] + header[ST_SIZE] );
    for( int i = 0; i < FOOT_SIZE; ++i ) {
        ifp >> footer[i];
        cout << "DEBUG FOOTER " << i << " " << footer[i] << endl;
    }
    cout << "DEBUG endof file pos " << ifp.pos() << endl;
    cout << "DEBUG file size is: " << ifp.size() << endl;
+
    qint16 i16;
    ifp.seek( ifp.size() - 16 );
    for( int i = 0; i < 8; ++i ) {
@@ -227,6 +276,12 @@ bool    ARZ::readArz()
    recordNames.clear();
    recordNames.reserve( s_records );
    for( int i = 0; i < s_records; ++i ) {
+       //cout << "DEBUG " << i << " / " << s_records << " " << records[i].dataOffset << " " << string(records[i].idstringIndex ) << endl;
+
+       if( records[i].dataOffset < 0 || ( records[i].dataOffset + records[i].dataCSize ) > ifp.size() ) {
+           cout << "ERROR skip " << recordNames[i] << " bad offset" << endl;
+           continue;
+       }
        records[i].readData( ifp );
        recordNames << string( records[i].idstringIndex );
        // no need to decompress everything
@@ -496,6 +551,7 @@ void    ARZ::flattenProxyWeights()
         ChampionPool cp[16];
         int npool;
 
+        log << "DEBUG " << records[r].vars.size() << endl;
         // by putting all the weights to 100, it does not seem to help matters
         // want to check if > 50 reduce and if < 50 then increase
         //
